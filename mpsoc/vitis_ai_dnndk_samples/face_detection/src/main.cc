@@ -29,7 +29,7 @@
 #include <queue>
 #include <string>
 #include <thread>
-#include <vector> 
+#include <vector>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -37,9 +37,9 @@
 
 // Header files for Vitis AI advanced APIs
 #include <dnndk/dnndk.h>
+#include <dnndk/dputils.h>
 
 // Header files for input image API
-#include "dputils.h"
 
 // DPU input & output Node name for DenseBox
 #define NODE_INPUT "L0"
@@ -68,9 +68,9 @@ class PairComp {  // An auxiliary class for sort the image pair according to its
 /**
  * @brief NMS - Discard overlapping boxes using NMS
  *
- * @param box - input box vector 
+ * @param box - input box vector
  * @param nms - IOU threshold
- * 
+ *
  * @ret - output box vector after discarding overlapping boxes
  */
 vector<vector<float>> NMS(const vector<vector<float>> &box, float nms) {
@@ -114,10 +114,10 @@ vector<vector<float>> NMS(const vector<vector<float>> &box, float nms) {
     for (size_t i = 0; i < keep.size(); ++i) {
         result.push_back(box[keep[i]]);
     }
-    
+
     return result;
 }
- 
+
 /**
  * @brief runDenseBox - Run DPU Task for Densebox
  *
@@ -137,18 +137,18 @@ void runDenseBox(DPUTask *task, Mat &img) {
     dpuSetInputImage2(task, NODE_INPUT, img);
 
     dpuRunTask(task);
-    
+
     DPUTensor *conv_out_tensor = dpuGetOutputTensor(task, NODE_OUTPUT);
     int tensorSize = dpuGetTensorSize(conv_out_tensor);
     int outHeight = dpuGetTensorHeight(conv_out_tensor);
-    int outWidth = dpuGetTensorWidth(conv_out_tensor); 
+    int outWidth = dpuGetTensorWidth(conv_out_tensor);
     vector<float> bb(tensorSize);
 
     int8_t *outAddr = (int8_t *)dpuGetOutputTensorAddress(task, NODE_CONV);
     int size = dpuGetOutputTensorSize(task, NODE_CONV);
     int channel = dpuGetOutputTensorChannel(task, NODE_CONV);
     float out_scale = dpuGetOutputTensorScale(task, NODE_CONV);
-    float *softmax = new float[size]; 
+    float *softmax = new float[size];
 
     //output data format convert
     dpuGetOutputTensorInHWCFP32(task, NODE_OUTPUT, bb.data(), tensorSize);
@@ -156,8 +156,8 @@ void runDenseBox(DPUTask *task, Mat &img) {
     //softmax
     dpuRunSoftmax(outAddr, softmax, channel, size/channel, out_scale);
 
-    // get original face boxes 
-    vector<vector<float>> boxes; 
+    // get original face boxes
+    vector<vector<float>> boxes;
     for (int i = 0; i < outHeight; i++) {
         for (int j = 0; j < outWidth; j++) {
             int position = i * outWidth + j;
@@ -172,16 +172,16 @@ void runDenseBox(DPUTask *task, Mat &img) {
             }
         }
     }
- 
+
     // Discard overlapping boxes using NMS
-    vector<vector<float>> res = NMS(boxes, 0.35); 
+    vector<vector<float>> res = NMS(boxes, 0.35);
 
     // Draw detected face boxes to image
-    for (size_t i = 0; i < res.size(); ++i) { 
+    for (size_t i = 0; i < res.size(); ++i) {
         float xmin = std::max(res[i][0] * scale_w, 0.0f);
         float ymin = std::max(res[i][1] * scale_h, 0.0f);
         float xmax = std::min(res[i][2] * scale_w, (float)img.cols);
-        float ymax = std::min(res[i][3] * scale_h, (float)img.rows); 
+        float ymax = std::min(res[i][3] * scale_h, (float)img.rows);
 
         rectangle(img, Point(xmin, ymin), Point(xmax, ymax), Scalar(0, 255, 0), 1, 1, 0);
     }
@@ -202,7 +202,7 @@ void faceDetection(DPUKernel *kernel) {
     queue<pairImage> queueInput;                                       // input queue
     priority_queue<pairImage, vector<pairImage>, PairComp> queueShow;  // display queue
 
-    VideoCapture camera(0); 
+    VideoCapture camera(0);
     if (!camera.isOpened()) {
         cerr << "Open camera error!" << endl;
         exit(-1);
@@ -323,6 +323,29 @@ void faceDetection(DPUKernel *kernel) {
     }
 }
 
+
+class Start {
+public:
+    Start() {
+        dpuOpen();
+        kernel = dpuLoadKernel("tiling_v7_640");
+    }
+
+    ~Start() {
+        dpuDestroyKernel(kernel);
+        dpuClose();
+    }
+
+    void RunForever() {
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(60));
+        }
+    }
+
+private:
+    DPUKernel* kernel;
+};
+
 /*
  * @brief main - Entry of DenseBox neural network sample.
  *
@@ -332,19 +355,12 @@ void faceDetection(DPUKernel *kernel) {
  */
 int main(void) {
     // Attach to DPU driver and prepare for running
-    dpuOpen();
+    auto start = Start();
 
     // Load DPU Kernel for DenseBox neural network
-    DPUKernel *kernel = dpuLoadKernel("densebox");
 
     // Doing face detection.
-    faceDetection(kernel);
+    // faceDetection(kernel);
 
-    // Destroy DPU Kernel & free resources
-    dpuDestroyKernel(kernel);
-
-    // Dettach from DPU driver & release resources
-    dpuClose();
-
-    return 0;
+    start.RunForever();
 }

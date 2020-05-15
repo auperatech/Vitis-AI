@@ -20,26 +20,24 @@ CC        ?=   gcc
 CFLAGS    +=   -O2 -Wall -Wpointer-arith -std=c++11 -ffast-math
 CFLAGS    +=   -I../common/
 
-LDFLAGS   +=  -ln2cube -lhineon -lopencv_videoio  -lopencv_imgcodecs -lopencv_highgui -lopencv_imgproc -lopencv_core -lpthread 
+LDFLAGS   +=  -ln2cube -lhineon -ldputils -lopencv_videoio  -lopencv_imgcodecs -lopencv_highgui -lopencv_imgproc -lopencv_core -lpthread 
 
 CUR_DIR =   $(shell pwd)
 
 MODDIR  =   $(CUR_DIR)/model
 BUILD   =   $(CUR_DIR)/build
-VPATH   =   $(SRC)::$(SRC_DPUTILS)
+VPATH   =   $(SRC)
 C_DIR  :=   $(shell find $(SRC) -name *.c)
 OBJ     =   $(patsubst %.c, %.o, $(notdir $(C_DIR)))
 CC_DIR :=   $(shell find $(SRC) -name *.cc)
 OBJ    +=   $(patsubst %.cc, %.o, $(notdir $(CC_DIR)))
 CPP_DIR :=   $(shell find $(SRC) -name *.cpp)
 OBJ    +=   $(patsubst %.cpp, %.o, $(notdir $(CPP_DIR)))
-OBJ    +=   dputils.o
 
 CFLAGS +=  -mcpu=cortex-a53
 
 MODEL = $(CUR_DIR)/model/dpu_densebox.elf
 SRC     =   $(CUR_DIR)/src
-SRC_DPUTILS = $(shell cd ../common/; pwd)
 
 .PHONY: all clean 
 
